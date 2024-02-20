@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
         for(int i = 0; i < token_count; i++) {
           if(strcmp(tokens[i], ">") == 0) {
-              if(i == token_count - 1 || tokens[i+1] == NULL || strcmp(tokens[i+1], ">") == 0) {
+              if(i == token_count - 1 || tokens[i+1] == NULL){
                   write(STDERR_FILENO, error_message, strlen(error_message));
                   free(working_str);
                   continue;
