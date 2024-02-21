@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <fcntl.h>
 
 #define WHITESPACE " \t\n"
 #define MAX_COMMAND_SIZE 255
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
+    // No more than one file for batch mode.
     else if (argc > 2)
     {
         write(STDERR_FILENO, error_message, strlen(error_message));
@@ -59,7 +61,7 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-
+        // Don't print in batch mode
         if (input_stream == stdin)
         {
             printf("msh> ");
@@ -67,7 +69,10 @@ int main(int argc, char *argv[])
 
         // Read the input command
         char *working_str = (char *)malloc(MAX_COMMAND_SIZE);
-        while(!fgets(working_str, MAX_COMMAND_SIZE, input_stream));
+        if(fgets(working_str, MAX_COMMAND_SIZE, input_stream) == NULL){
+            // EOF
+            break;
+        }
 
         // Tokenize the input string
         int token_count = 0;
@@ -84,44 +89,13 @@ int main(int argc, char *argv[])
                 token_count++;
             }
         }
+        tokens[token_count]=NULL;
 
         // Empty command
         if (token_count == 0)
         {
             free(working_str);
             continue;
-        }
-
-        // Redirection
-        int redirection_error = 0;
-        for (int i = 0; i < token_count; i++)
-        {
-            if (strcmp(tokens[i], ">") == 0)
-            {
-                if (i == token_count - 1 || strcmp(tokens[i + 1] , ">") == 0 || i < token_count - 2)
-                {
-                    write(STDERR_FILENO, error_message, strlen(error_message));
-                    free(working_str);
-                    redirection_error = 1;
-                    break;
-                }
-            }
-        }
-        if (redirection_error) continue;
-
-        // exit command
-        if (strcmp(tokens[0], "exit") == 0)
-        {
-            // No additional arguments allowed
-            if (token_count > 1)
-            {
-                write(STDERR_FILENO, error_message, strlen(error_message));
-                continue;
-            }
-            else
-            {
-                exit(0);
-            }
         }
 
         // cd Command
@@ -140,6 +114,59 @@ int main(int argc, char *argv[])
             free(working_str);
             continue;
         }
+
+        // exit command
+        if (strcmp(tokens[0], "exit") == 0)
+        {
+            // No arguments allowed
+            if (token_count > 1)
+            {
+                write(STDERR_FILENO, error_message, strlen(error_message));
+                continue;
+            }
+            else
+            {
+                exit(0);
+            }
+        }
+
+        // Redirection
+        int redirection_error = 0;
+        int redirection_successful = 0;
+        for (int i = 0; i < token_count; i++)
+        {
+            if (strcmp(tokens[i], ">") == 0){
+                // Throw an error if there are more than one redirection target or multiple '>'
+                if (tokens[i+2] != NULL)
+                {
+                    write(STDERR_FILENO, error_message, strlen(error_message));
+                    free(working_str);
+                    redirection_error = 1;
+                    break;
+                }
+                else{
+                    pid_t redirection_pid = fork();
+
+                    if (redirection_pid == 0){
+                        int fd = open( tokens[i+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR );
+                        if( fd < 0 )
+                        {
+                            write(STDERR_FILENO, error_message, strlen(error_message));
+                            redirection_error=1;             
+                        }
+                        dup2( fd, 1 );
+                        close( fd );
+                        tokens[i]=NULL;
+                        execvp( tokens[0], tokens);
+                        redirection_successful = 1;
+                    }
+                    else if (redirection_pid>0){
+                        wait(NULL);
+                    }
+                }
+            }
+        }
+        if (redirection_error  || redirection_successful) continue;
 
         pid_t pid = fork();
         if (pid == 0)
