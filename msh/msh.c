@@ -136,8 +136,9 @@ int main(int argc, char *argv[])
         for (int i = 0; i < token_count; i++)
         {
             if (strcmp(tokens[i], ">") == 0){
-                // Throw an error if there are more than one redirection target or multiple '>'
-                if (tokens[i+2] != NULL)
+                // Throw an error if there are more than one token after '>'
+                // or if there are no tokens before the '>'
+                if ( tokens[i+2] || !tokens[i-1])
                 {
                     write(STDERR_FILENO, error_message, strlen(error_message));
                     free(working_str);
@@ -145,8 +146,8 @@ int main(int argc, char *argv[])
                     break;
                 }
                 else{
+                    redirection_successful = 1;
                     pid_t redirection_pid = fork();
-
                     if (redirection_pid == 0){
                         int fd = open( tokens[i+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR );
                         if( fd < 0 )
@@ -158,7 +159,6 @@ int main(int argc, char *argv[])
                         close( fd );
                         tokens[i]=NULL;
                         execvp( tokens[0], tokens);
-                        redirection_successful = 1;
                     }
                     else if (redirection_pid>0){
                         wait(NULL);
