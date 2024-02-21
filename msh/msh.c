@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
 
         // Redirection
         int redirection_error = 0;
-        int redirection_successful = 0;
+        int redirection_initiated = 0;
         for (int i = 0; i < token_count; i++)
         {
             if (strcmp(tokens[i], ">") == 0){
@@ -146,18 +146,27 @@ int main(int argc, char *argv[])
                     break;
                 }
                 else{
-                    redirection_successful = 1;
+                    redirection_initiated = 1;
                     pid_t redirection_pid = fork();
+                    
+                    // Child process
                     if (redirection_pid == 0){
+
+                        // Open the file, create if it doesn't exist
                         int fd = open( tokens[i+1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR );
                         if( fd < 0 )
                         {
                             write(STDERR_FILENO, error_message, strlen(error_message));
                             redirection_error=1;             
                         }
+
+                        // Write stdout to file
                         dup2( fd, 1 );
                         close( fd );
+
+                        // Nullify the '>' to prevent it from being executed as a program
                         tokens[i]=NULL;
+
                         execvp( tokens[0], tokens);
                     }
                     else if (redirection_pid>0){
@@ -166,7 +175,7 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        if (redirection_error  || redirection_successful) continue;
+        if ( redirection_error  || redirection_initiated ) continue;
 
         pid_t pid = fork();
         if (pid == 0)
